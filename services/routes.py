@@ -11,7 +11,7 @@ from models.networks import Nodes, Edges, RoutesAudit
 from connection_utils.db import session
 from connection_utils.redis.connection import redis_client as redis
 from connection_utils.db.transactional import Transactional
-from serializers.serializers import EdgeSerializer, NodeSerializer
+from serializers.serializers import EdgeSerializer, NodeSerializer, RoutesAuditSerializer
 from services.networks import NetworkService
 import heapq
 
@@ -89,3 +89,46 @@ class RouteService:
                     previous[neighbour] = node
                     heapq.heappush(self.heap, (candidate, neighbour))
         return None,[]
+    
+
+    async def _stored_node_keys(self, value: str) -> list[str]:
+        keys = [value]
+        result = await session.execute(
+            select(Nodes).where(Nodes.name == value, Nodes.status == "published")
+        )
+        node = result.scalar_one_or_none()
+        if node is not None:
+            keys.append(str(node.id))
+        return keys
+
+    async def get_routes_history(self, source: str | None = None, destination: str | None = None, limit: int = 10, date_from: str | None = None, date_to: str | None = None):
+        query = select(RoutesAudit)
+        if source is not None:
+            query = query.where(RoutesAudit.source.in_(await self._stored_node_keys(source)))
+        if destination is not None:
+            query = query.where(RoutesAudit.destination.in_(await self._stored_node_keys(destination)))
+        if date_from is not None:
+            query = query.where(RoutesAudit.created_at >= date_from)
+        if date_to is not None:
+            if len(date_to) == 10:
+                date_to = f"{date_to} 23:59:59.999999"
+            query = query.where(RoutesAudit.created_at <= date_to)
+        query = query.order_by(RoutesAudit.created_at.desc()).limit(limit)
+        result = await session.execute(query)
+        routes = [RoutesAuditSerializer().dump(route) for route in result.scalars().all()]
+        ids = [
+            int(value)
+            for route in routes
+            for value in (route.get("source"), route.get("destination"))
+            if isinstance(value, str) and value.isdigit()
+        ]
+        if ids:
+            nodes = await NetworkService().get_nodes_by_ids(ids)
+            for route in routes:
+                for key in ("source", "destination"):
+                    value = route.get(key)
+                    if isinstance(value, str) and value.isdigit():
+                        node = nodes.get(int(value))
+                        if node is not None:
+                            route[key] = node.name
+        return routes

@@ -21,6 +21,9 @@ def get_config() -> Config:
         with env_file.open() as json_env_file:
             config_data = json.load(json_env_file)
     config_data.setdefault("ENV", env)
+    for key in Config.model_fields:
+        if os.getenv(key):
+            config_data[key] = os.environ[key]
     return Config(**config_data)
 
 
