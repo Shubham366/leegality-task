@@ -1,0 +1,9 @@
+FastAPI
+uvicorn
+click
+SQLAlchemy[asyncio]
+aiosqlite
+psycopg2-binary
+python-dotenv
+marshmallow-sqlalchemy
+redis
