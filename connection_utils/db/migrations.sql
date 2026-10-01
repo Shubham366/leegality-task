@@ -47,3 +47,9 @@ CREATE TABLE IF NOT EXISTS routes_audit (
 
 CREATE INDEX IF NOT EXISTS idx_routes_audit_created_at ON routes_audit (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_routes_audit_src_dst    ON routes_audit (source, destination, created_at DESC);
+
+ALTER TABLE nodes ADD COLUMN status TEXT NOT NULL DEFAULT 'published'
+    CONSTRAINT nodes_status_valid CHECK (status IN ('published', 'archived'));
+ 
+ALTER TABLE edges ADD COLUMN status TEXT NOT NULL DEFAULT 'published'
+    CONSTRAINT edges_status_valid CHECK (status IN ('published', 'archived'));
